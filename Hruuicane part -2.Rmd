@@ -1,0 +1,244 @@
+---
+title: "Hurricane Fatalities"
+author: "Learning Curve"
+date: "9/23/2018"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, fig.align = 'center')
+```
+
+This is a part2 of hurricane project. The disastrous impact of recent hurricanes, Katrina,Maria,Harvey and Irma I was curious to know about the history of hurricanes and tropical storms. According Wikipedia’s list of costliest Atlantic hurricanes, it lists 45 hurricanes going back to Hurricane Betsy in 1965, with 30 of them since 2000 totaling 803 billion dollars in estimated damages and 6,591 US fatalities.
+
+Some simple EDA to know more about the damage caused by these hurricanes.
+ 
+```{r,echo=FALSE}
+
+library(dplyr)
+library(ggplot2)
+library(ggrepel)
+library(tidyr)
+library(readr)
+library(ggthemes)
+library(knitr)
+
+
+```
+
+
+```{r,echo=FALSE}
+
+hurricanes <- read_csv("~/Dropbox/DataFiles/Hurricanes.csv")
+head(hurricanes)
+```
+This is a tidy data set which will make life easier and appears to be cleaned up substantially. 
+
+```{r}
+hurricanes %>%
+summary(-Year)
+```
+
+```{r}
+
+hurricanes$Class <- hurricanes$Classification %>% 
+  gsub("Category|hurricane", "", .) %>% 
+  sub("Tropical storm", "0", .) %>% 
+  gsub("^\\s+|\\s+$","",.) %>%
+  as.numeric() 
+
+df <-hurricanes %>%
+  group_by(Year,Class) %>%
+  summarise(Distinct_Storms = n_distinct(Name))
+df$Class = factor(df$Class)
+
+p = ggplot(df, aes(x = Year, y = Distinct_Storms, col = Class)) + theme_economist()
+p + geom_line(size = 1.1) + 
+  scale_color_brewer(direction = -1, palette = "Spectral") + 
+  ggtitle("Number of Storms Per Year By Category") + 
+  facet_wrap(~Class, scales = "free_x") + 
+  geom_smooth(method = 'lm', se = FALSE, col = 'black') +
+  theme(axis.text.x = element_text(angle=90), legend.position = 'none') + 
+  ylab('Storms')
+```
+
+Lets see the trend in the hurricane over the years
+
+```{r}
+df = hurricanes %>%
+  group_by(Year) %>%
+  summarise(Distinct_Storms = n_distinct(Name))
+
+p = ggplot(df, aes(x = Year, y = Distinct_Storms)) + theme_economist()
+p + geom_line(size = 1.1) + 
+  ggtitle("Number of Storms Per Year") + 
+  geom_smooth(method='lm', se = FALSE) + 
+  ylab("Storms")
+```
+
+There is an upward trend in the number of storms over time.
+
+Lets see statistics of the damage caused by the hurricanes.
+```{r}
+
+knitr::kable(summary(hurricanes %>% 
+                       select(Damage_billions,US_Fatalities)))
+
+```
+Stativcs show 
+-  Average damage is arond 14.5 billion 
+-  Average fatalities 120
+
+Again, these numbers are in aggregate and may not tell the whole story. Dividing these into groups of storms is likely much more meaningful.
+
+Lets see hurricanes of Category 3 or greater
+```{r}
+
+hurricanes %>%
+  filter(Class >= 3) %>%
+  group_by(Year,Class) %>%
+  summarise(Total =n()) %>%
+  arrange(desc(Total))  %>%
+  mutate(act = reorder(Total,Class)) %>%
+
+  ggplot(aes(x=Year,y= Total,fill=Class)) +
+  geom_bar(stat = "identity")
+  
+```
+
+Harvey and Katrina are reported to have done 125 billions dollars each followed by Maria doing damage of 91.2 billion, Sandy at 68.7, and Irma at 64.8.
+
+```{r}
+hurricanes %>% ggplot(aes(x=Year, y=Damage_billions, label=Name)) + 
+  geom_point(color = 'steelblue') + 
+  geom_text_repel(size=3) + theme_bw() + theme(text = element_text(size=10)) +
+  ggtitle("Damages in Billions of USD")
+```
+
+Lets see which storms might be the most deadly using the storm measurements highest wind speed recorded and lowest pressure recorded.
+
+```{r}
+hurricanes %>% ggplot(aes(x=Year, y=Highest_winds_mph, label=Name)) + 
+  geom_point(color = 'steelblue') + 
+  geom_text_repel(size=2) + theme_bw() + theme(text = element_text(size=10)) +
+  ggtitle("Highest Winds MPH")
+```
+
+
+
+```{r}
+hurricanes %>% 
+  ggplot(aes(x=Year, y=Lowest_Pressure_mbar, label=Name)) + 
+  geom_point(color = 'steelblue') +
+  geom_text_repel(size=3) + theme_bw() + theme(text = element_text(size=10)) +
+  ggtitle("Lowest pressure")
+```
+
+Fatalities caused due to low pressure 
+
+```{r}
+hurricanes %>% 
+  ggplot(aes(x=Lowest_Pressure_mbar, y=US_Fatalities, label=Name)) + 
+  geom_point(color = 'steelblue') + 
+  geom_text_repel(size=3) + theme_bw() + theme(text = element_text(size=10)) +
+  ggtitle("Lowest Pressue (mbar) against US Fatalities")
+```
+
+As we can see that Maria and Katrina are both on the higher end ofthe wind speed distribution and the lower end of the air pressure distribution, we can assert that a more powerful storm is a necessary component for the kind of death tolls associated with these storms.
+
+```{r}
+hurricanes %>% 
+  ggplot(aes(x=Highest_winds_mph, y=US_Fatalities, label=Name)) + 
+  geom_point(color = 'steelblue') + 
+  geom_text_repel(size=3) + theme_bw() + theme(text = element_text(size=10)) +
+  ggtitle("Highest Winds MPH against US Fatalities")
+```
+The fatalities caused by Katrina and Maria indidually are much higher than the  combined fatalities of all other hurricanes.
+```{r}
+hurricanes %>% 
+  filter(!(Name %in% c("Maria", "Katrina"))) %>% 
+  summarize(sum(US_Fatalities))
+  
+```
+
+Fatalities compared to top 5 US hurricanes Vs rest of the hurricanes.
+
+```{r}
+hurricanes$Hurricane = hurricanes$Name
+hurricanes[rank(-hurricanes$US_Fatalities)>5,]$Hurricane = "All other hurricanes (40)"
+
+hurricanes %>% 
+  ggplot(aes(Hurricane, US_Fatalities,labels=US_Fatalities)) + 
+  geom_bar(stat="identity", width=0.7,fill= "steelblue")+
+  theme_minimal()+
+  theme_bw() + theme(text = element_text(size=10)) +
+  ggtitle("US Hurricane Deaths")+
+  
+  coord_flip()
+```
+
+
+```{r}
+
+hurricanes[rank(-hurricanes$Damage_billions)>15,]$Hurricane = "All others (30)"
+
+hurricanes %>% 
+  ggplot(aes(Hurricane, Damage_billions))+
+    geom_bar(stat="identity",width= 0.7,fill="steelblue") +
+  theme_minimal() + 
+  theme(text = element_text(size=8), axis.text.x = element_text(angle=45, hjust=1)) +
+ ggtitle("US Hurricane Damages (Billions)")
+
+```
+
+
+```{r}
+hurricanes %>% ggplot(aes(x=Year, y=US_Fatalities, label=Name)) + 
+  geom_point(aes(color = Class)) + 
+  scale_fill_brewer(palette ="Spectral")+
+  geom_text_repel(size=3) + theme_bw() + theme(text = element_text(size=8)) +
+  ggtitle("US Fatalities")
+```
+
+
+
+Is there relationship between Wind and pressure? This chart helps us to see that low pressure and high winds are likely negatively correlated. We can also see that the wind is essentially the predictor in the data set which can perfectly predict how a storm is classified
+
+```{r}
+df <- hurricanes %>% 
+  filter(Lowest_Pressure_mbar > 0) %>%
+  group_by(Class,Year,Loc1,Loc2,Loc3) %>%
+  summarise(MEAN_WIND_KTS = mean(Highest_winds_mph), MEAN_PRESSURE = mean(Lowest_Pressure_mbar)) %>%
+  arrange(MEAN_WIND_KTS)
+df$Class = factor(df$Class)
+
+p = ggplot(df,aes(x=MEAN_WIND_KTS, y = MEAN_PRESSURE, fill = Class)) + theme_economist()
+p + 
+  geom_hex(alpha = 0.8) +
+  scale_fill_brewer(direction = -1, palette = "Spectral") + 
+  scale_y_continuous(labels = scales::comma)+ 
+  theme(legend.position = 'right') + 
+  ggtitle("Wind KTS vs. Pressure by Category (H)")
+
+
+```
+
+
+The code can be found in Github
+
+
+**...To be continued **
+
+I have done some basic EDA and identified some patterns in the data. While doing some EDA can simply be just for fun, in most data analysis, it's important to find a place to apply these discoveries by making and testing hypotheses! There are plenty of industries where you could find a use for this:
+
+- Flood Insurance - improve statistical modeling and risk analysis
+- Land Development - identify safe location 
+- Planning the infrastucture projects near the coast
+
+
+
+
+
+
